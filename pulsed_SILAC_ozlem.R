@@ -136,13 +136,13 @@ filter_valids = function(df, conditions, min_count,
     df$KEEP = apply(cond.filter, 1, all)
   }
   
-  return(df)  # Filter rules are listed in the KEEP column
+  return(df)  # No rows are omitted, filter rules are listed in the KEEP column
 }
-lightF = filter_valids(light, c("DMSO", "M1071", "Rapa"), c(4, 2, 2), # F for filtered
+lightF = filter_valids(light, c("DMSO", "M1071", "Rapa"), c(5, 4, 4), # F for filtered
                        is_infinite = TRUE, at_least_one = FALSE) # contains infinite as invalids
-heavyF = filter_valids(heavy, c("DMSO", "M1071", "Rapa"), c(4, 2, 2), # F for filtered
+heavyF = filter_valids(heavy, c("DMSO", "M1071", "Rapa"), c(5, 4, 4), # F for filtered
                        is_infinite = TRUE, at_least_one = FALSE) # contains infinite as invalids
-ratioF = filter_valids(ratio, c("DMSO", "M1071", "Rapa"), c(4, 2, 2), # F for filtered
+ratioF = filter_valids(ratio, c("DMSO", "M1071", "Rapa"), c(5, 4, 4), # F for filtered
                        is_infinite = FALSE, at_least_one = FALSE) # contains infinite as invalids
 
 
@@ -167,7 +167,7 @@ sample_centering = function(df, df2) {
 lightFC = sample_centering(lightF, data)
 heavyFC = sample_centering(heavyF, data)
 
-# Normalize light and heavy channel data to DMSO 0hr
+# Normalize light and heavy channel data with DMSO 0hr
 DMSO_norm = function(df) {
   # df = dataframe containing filtered and normalized light or heavy channel data
   log.names = grep("^LOG2.*(3hr|6hr|12hr|24hr)", names(df), value = TRUE)
@@ -191,7 +191,40 @@ heavyFCD = DMSO_norm(heavyFC)
 #############################################
 # Step 7 - Score treatment/control rate of change in intensity over time
 #############################################
-# 
+# Use the LOG2 or NORM columns to calculate slope of linear regression
+score = function(df, sample.names, suffix) {
+  require(gtools)   # For mixedsort
+  # df = data frame containing LOG2 columns for computing differences in rate of change
+  # sample.names = vector of regex patterns for extracting column names for each condition
+  # suffix = character vector describing the name of each condition for output
+  
+  log.names = lapply(sample.names, function(x) grep(x, names(df), value = TRUE))
+  df2 = lapply(log.names, function(x) {   # Loop through each condition
+    x = mixedsort(x)  # order the columns alphanumerically
+    apply(df[x], 1, function(y) data.frame(time = 1:length(y), value = y))  # Loop through each row
+  })
+  # Apply linear model after excluding -Inf rows
+  slopes = lapply(df2, function(x) {   # Loop through each condition
+    sapply(x, function(y) {
+      y = y[!is.infinite(y$value), ]   # Remove -Inf rows
+      if (nrow(y) > 1) {   # Only perform linear regression if two or more data points are available
+        lm(value ~ time, y)$coefficients[2]   # Extract slope from linear model
+      } else {   # Otherwise return NA
+        NA
+      }
+    })
+  })
+  # Output columns
+  df[paste0("slope_", suffix)] = as.data.frame(slopes)
+  return(df)
+}
+# score_ is the difference in slope between treatment and DMSO control
+lightFCDS = score(lightFCD, c("^LOG2.*DMSO", "^LOG2.*M1071", "^LOG2.*Rapa"), c("DMSO", "M1071", "Rapa"))
+lightFCDS = mutate(lightFCDS, score_M1071 = slope_M1071 - slope_DMSO)
+lightFCDS = mutate(lightFCDS, score_Rapa = slope_Rapa - slope_DMSO)
+heavyFCDS = score(heavyFCD, c("^LOG2.*DMSO", "^LOG2.*M1071", "^LOG2.*Rapa"), c("DMSO", "M1071", "Rapa"))
+heavyFCDS = mutate(heavyFCDS,score_M1071 = slope_M1071 - slope_DMSO)
+heavyFCDS = mutate(heavyFCDS, score_Rapa = slope_Rapa - slope_DMSO)
 
 
 #############################################
@@ -199,7 +232,7 @@ heavyFCD = DMSO_norm(heavyFC)
 #############################################
 #INSTALL SUPERHEAT FOR VISUALIZATION
 #devtools::install_github("rlbarter/superheat")
-# Heatmaps for light and heavy data (NOT RATIO)
+### Heatmaps for light and heavy data (NOT RATIO)
 plot_heatmap = function(df, pattern) {
   # df = data frame containing filtered/normalized data for plotting
   # pattern = regular expression pattern for selecting column names to plot
@@ -259,13 +292,14 @@ plot_heatmap = function(df, pattern) {
             left.label.text.size = 1,
             left.label.col = "white")
 }
-plot_heatmap(lightFCD, "^NORM")
-plot_heatmap(lightFCD, "^LOG2")
-plot_heatmap(heavyFCD, "^NORM")
-plot_heatmap(heavyFCD, "^LOG2")
-plot_heatmap(ratioF, "^LOG2")
+#plot_heatmap(lightFCDS, "^NORM")
+#plot_heatmap(lightFCDS, "^LOG2")
+#plot_heatmap(heavyFCDS, "^NORM")
+#plot_heatmap(heavyFCDS, "^LOG2")
+#plot_heatmap(ratioF, "^LOG2")
 
-# Pair plot
+
+### Pair plot
 plot_pairs = function(df, pattern, use_keep = FALSE) {
   # df = data frame carrying data of interest
   # pattern = regex pattern to select column of interest
@@ -285,24 +319,25 @@ plot_pairs = function(df, pattern, use_keep = FALSE) {
          lower.pars = list(scatter = "stats"),
          stat.pars = list(verbose = FALSE, fontsize = 15))
 }
-# Pairs plot: light label after DMSO normalization
-plot_pairs(lightFCD, "^NORM.*DMSO")
-plot_pairs(lightFCD, "^NORM.*M1071")
-plot_pairs(lightFCD, "^NORM.*Rapa")
-# Pairs plot: light label before DMSO normalization
-plot_pairs(lightFCD, "^LOG2.*DMSO")
-plot_pairs(lightFCD, "^LOG2.*M1071")
-plot_pairs(lightFCD, "^LOG2.*Rapa")
-# Pairs plot: heavy label after DMSO normalization
-plot_pairs(heavyFCD, "^NORM.*DMSO")
-plot_pairs(heavyFCD, "^NORM.*M1071")
-plot_pairs(heavyFCD, "^NORM.*Rapa")
-# Pairs plot: heavy label before DMSO normalization
-plot_pairs(heavyFCD, "^LOG2.*DMSO")
-plot_pairs(heavyFCD, "^LOG2.*M1071")
-plot_pairs(heavyFCD, "^LOG2.*Rapa")
+## Pairs plot: light label after DMSO normalization
+#plot_pairs(lightFCDS, "^NORM.*DMSO")
+#plot_pairs(lightFCDS, "^NORM.*M1071")
+#plot_pairs(lightFCDS, "^NORM.*Rapa")
+## Pairs plot: light label before DMSO normalization
+#plot_pairs(lightFCDS, "^LOG2.*DMSO")
+#plot_pairs(lightFCDS, "^LOG2.*M1071")
+#plot_pairs(lightFCDS, "^LOG2.*Rapa")
+## Pairs plot: heavy label after DMSO normalization
+#plot_pairs(heavyFCDS, "^NORM.*DMSO")
+#plot_pairs(heavyFCDS, "^NORM.*M1071")
+#plot_pairs(heavyFCDS, "^NORM.*Rapa")
+## Pairs plot: heavy label before DMSO normalization
+#plot_pairs(heavyFCDS, "^LOG2.*DMSO")
+#plot_pairs(heavyFCDS, "^LOG2.*M1071")
+#plot_pairs(heavyFCDS, "^LOG2.*Rapa")
 
-# Histograms of heavy vs light in each sample
+
+### Histograms of heavy vs light in each sample
 plot_hist = function(df, heavy, light, compare_time = FALSE) {
   # df = data frame containing Log2 intensity
   # heavy, light = regex patterns dictating rules for extracting light and heavy columns
@@ -343,18 +378,19 @@ plot_hist = function(df, heavy, light, compare_time = FALSE) {
                           labels = c("Heavy", "Light"))
   }
 }
-# Compare Time
-plot_hist(cbind(lightFCD, heavyFCD), compare_time = TRUE,
-          "^LOG2\\.L.*(3hr|6hr|12hr|24hr)", "^LOG2\\.H.*(3hr|6hr|12hr|24hr)")
-plot_hist(cbind(lightFCD, heavyFCD), compare_time = TRUE,
-          "^NORM\\.L.*(3hr|6hr|12hr|24hr)", "^NORM\\.H.*(3hr|6hr|12hr|24hr)")
-# Compare SILAC labeling
-plot_hist(cbind(lightFCD, heavyFCD), compare_time = FALSE,
-          "^LOG2\\.L.*(3hr|6hr|12hr|24hr)", "^LOG2\\.H.*(3hr|6hr|12hr|24hr)")
-plot_hist(cbind(lightFCD, heavyFCD), compare_time = FALSE,
-          "^NORM\\.L.*(3hr|6hr|12hr|24hr)", "^NORM\\.H.*(3hr|6hr|12hr|24hr)")
+## Compare Time
+#plot_hist(cbind(lightFCDS, heavyFCDS), compare_time = TRUE,
+#          "^LOG2\\.L.*(3hr|6hr|12hr|24hr)", "^LOG2\\.H.*(3hr|6hr|12hr|24hr)")
+#plot_hist(cbind(lightFCDS, heavyFCDS), compare_time = TRUE,
+#          "^NORM\\.L.*(3hr|6hr|12hr|24hr)", "^NORM\\.H.*(3hr|6hr|12hr|24hr)")
+## Compare SILAC labeling
+#plot_hist(cbind(lightFCDS, heavyFCDS), compare_time = FALSE,
+#          "^LOG2\\.L.*(3hr|6hr|12hr|24hr)", "^LOG2\\.H.*(3hr|6hr|12hr|24hr)")
+#plot_hist(cbind(lightFCDS, heavyFCDS), compare_time = FALSE,
+#          "^NORM\\.L.*(3hr|6hr|12hr|24hr)", "^NORM\\.H.*(3hr|6hr|12hr|24hr)")
 
-# Histograms of heavy vs light in fully-incorporated light (DMSO_0hr) and heavy (Heavy_incorp) samples
+
+### Histograms of heavy vs light in fully-incorporated light (DMSO_0hr) and heavy (Heavy_incorp) samples
 plot_hist2 = function(df) {
   # df = data frame containing Log2 intensity
   # Designed specifically to create one histogram
@@ -384,9 +420,38 @@ plot_hist2 = function(df) {
                         breaks = c("H", "L"),
                         labels = c("Heavy", "Light"))
 }
-# Perform global median normalization (centering) on P4heavy
+## Perform global median normalization (centering) on P4heavy
 P4heavyC = P4heavy
 P4heavyC$LOG2.L.Heavy_incorp = P4heavy$LOG2.L.Heavy_incorp - median(data$LOG2.Heavy_incorp)
 P4heavyC$LOG2.H.Heavy_incorp = P4heavy$LOG2.H.Heavy_incorp - median(data$LOG2.Heavy_incorp)
-plot_hist2(cbind(lightFCD, heavyFCD, P4heavyC))
+#plot_hist2(cbind(lightFCDS, heavyFCDS, P4heavyC))
+
+
+### Table of summary statistics
+summary_stat = function(df) {
+  # df = data frame containing LOG2 intensity
+  
+  require(dplyr)
+  df2 = select(df, starts_with("LOG2"))
+  data.frame(
+    Sample = sub("(LOG2.L.|LOG2.H.|LOG2.H.L.)", "", names(df2)),
+    Raw = sapply(df2, function(x) {
+      paste0(sum(!is.infinite(x) & !is.na(x)), " / ", length(x), 
+             " (", round(sum(!is.infinite(x) & !is.na(x)) / length(x) * 100, 1), "%)")
+    }),
+    Filtered = sapply(df2[df$KEEP,], function(x) {
+      paste0(sum(!is.infinite(x) & !is.na(x)), " / ", length(x), 
+             " (", round(sum(!is.infinite(x) & !is.na(x)) / length(x) * 100, 1), "%)")
+    })
+  )
+}
+#summary_stat(lightFCDS)
+#summary_stat(heavyFCDS)
+#summary_stat(ratioF)
+
+
+#############################################
+# Step 9 - Save workspace as Rmd file
+#############################################
+save.image("pulsed_SILAC.RData")
 
