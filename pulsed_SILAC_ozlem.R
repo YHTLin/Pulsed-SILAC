@@ -198,7 +198,7 @@ score = function(df, sample.names, suffix) {
   # sample.names = vector of regex patterns for extracting column names for each condition
   # suffix = character vector describing the name of each condition for output
   
-  log.names = lapply(sample.names, function(x) grep(x, names(df), value = TRUE))
+  log.names = lapply(sample.names, function(x) grep(x, names(df), value = TRUE, perl = TRUE)) #perl = TRUE enables negative lookahead
   df2 = lapply(log.names, function(x) {   # Loop through each condition
     x = mixedsort(x)  # order the columns alphanumerically
     apply(df[x], 1, function(y) data.frame(time = 1:length(y), value = y))  # Loop through each row
@@ -206,7 +206,7 @@ score = function(df, sample.names, suffix) {
   # Apply linear model after excluding -Inf rows
   slopes = lapply(df2, function(x) {   # Loop through each condition
     sapply(x, function(y) {
-      y = y[!is.infinite(y$value), ]   # Remove -Inf rows
+      y = y[!is.infinite(y$value) & !is.na(y$value), ]   # Remove -Inf or NA rows
       if (nrow(y) > 1) {   # Only perform linear regression if two or more data points are available
         lm(value ~ time, y)$coefficients[2]   # Extract slope from linear model
       } else {   # Otherwise return NA
@@ -219,12 +219,16 @@ score = function(df, sample.names, suffix) {
   return(df)
 }
 # score_ is the difference in slope between treatment and DMSO control
-lightFCDS = score(lightFCD, c("^LOG2.*DMSO", "^LOG2.*M1071", "^LOG2.*Rapa"), c("DMSO", "M1071", "Rapa"))
+# IGNORE DMSO_0HR IN LINEAR REGRESSION BECAUSE HEAT MAP SUGGESTS THAT THE SAMPLE COULD BE MISLABLED
+lightFCDS = score(lightFCD, c("^LOG2.*DMSO(?!_0hr)", "^LOG2.*M1071", "^LOG2.*Rapa"), c("DMSO", "M1071", "Rapa"))
 lightFCDS = mutate(lightFCDS, score_M1071 = slope_M1071 - slope_DMSO)
 lightFCDS = mutate(lightFCDS, score_Rapa = slope_Rapa - slope_DMSO)
-heavyFCDS = score(heavyFCD, c("^LOG2.*DMSO", "^LOG2.*M1071", "^LOG2.*Rapa"), c("DMSO", "M1071", "Rapa"))
+heavyFCDS = score(heavyFCD, c("^LOG2.*DMSO(?!_0hr)", "^LOG2.*M1071", "^LOG2.*Rapa"), c("DMSO", "M1071", "Rapa"))
 heavyFCDS = mutate(heavyFCDS,score_M1071 = slope_M1071 - slope_DMSO)
 heavyFCDS = mutate(heavyFCDS, score_Rapa = slope_Rapa - slope_DMSO)
+ratioS = score(ratio, c("^LOG2.*DMSO(?!_0hr)", "^LOG2.*M1071", "^LOG2.*Rapa"), c("DMSO", "M1071", "Rapa"))
+ratioS = mutate(ratioS, score_M1071 = slope_M1071 - slope_DMSO)
+ratioS = mutate(ratioS, score_Rapa = slope_Rapa - slope_DMSO)
 
 
 #############################################
@@ -335,6 +339,10 @@ plot_pairs = function(df, pattern, use_keep = FALSE) {
 #plot_pairs(heavyFCDS, "^LOG2.*DMSO")
 #plot_pairs(heavyFCDS, "^LOG2.*M1071")
 #plot_pairs(heavyFCDS, "^LOG2.*Rapa")
+## Pairs plot: ratio
+#plot_pairs(ratioF, "^LOG2.*DMSO")
+#plot_pairs(ratioF, "^LOG2.*M1071")
+#plot_pairs(ratioF, "^LOG2.*Rapa")
 
 
 ### Histograms of heavy vs light in each sample
