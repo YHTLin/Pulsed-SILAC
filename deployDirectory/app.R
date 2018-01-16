@@ -156,7 +156,7 @@ score = function(df, sample.names, suffix) {
     x = mixedsort(x)  # order the columns alphanumerically
     apply(df[x], 1, function(y) data.frame(time = 1:length(y), value = y))  # Loop through each row
   })
-  # Apply linear model after excluding -Inf rows
+  # Apply linear model after excluding -Inf or NA rows
   slopes = lapply(df2, function(x) {   # Loop through each condition
     sapply(x, function(y) {
       y = y[!is.infinite(y$value) & !is.na(y$value), ]   # Remove -Inf or NA rows
@@ -419,6 +419,42 @@ summary_stat = function(df) {
 }
 
 
+### Line Plot of LOG2 intensity vs Time
+##Derived from function "score"
+line_plot = function(df, ID, sample.names, label) {
+  # df = data frame containing LOG2 intensity
+  # ID = a numeric vector of length one indicating which row of data to use for plotting
+  # sample.names = vector of regex patterns for extracting column names for each condition
+  # label = character vector describing the name of each condition for output (same length as sample.names)
+  
+  require(ggplot2)
+  log.names = lapply(sample.names, function(x) grep(x, names(df), value = TRUE, perl = TRUE)) #perl = TRUE enables negative lookahead
+  
+  df2 = lapply(1:length(log.names), function(i) {   # Loop through each condition
+    x = mixedsort(log.names[[i]])  # order the columns alphanumerically
+    data.frame(time = 1:length(df[ID, x]), value = as.numeric(df[ID, x]), lab = label[i])
+  })
+  df2 = Reduce(rbind, df2)
+  df2 = df2[!is.infinite(df2$value) & !is.na(df2$value), ] # Remove -Inf or NA rows
+
+  if (nrow(df2) == 0) {
+    return("No valid values available for plotting!")
+  } else {
+    ggplot(df2, aes(x = time, y = value, color = lab, alpha = 0.3)) +
+      geom_line(size = 1.5) +
+      geom_point(size = 3) +
+      ylab(expression(log[2]-transformed~values)) +
+      scale_x_continuous("Time",
+                         breaks = c(1,2,3,4),
+                         labels = c("3H", "6H", "12H", "24H"),
+                         limits = c(1,4)) +
+      scale_color_discrete(name = "Legend") +
+      guides(alpha = FALSE)
+  }
+}
+
+
+
 #############################################
 # Step 9 - ShinyApp code
 #############################################
@@ -596,7 +632,8 @@ ui = navbarPage(
                       to meet this criterion. Scores are computed by subtracting the slopes of the 
                       DMSO control from those of the treatment group. A negative score suggests that the rate of 
                       synthesis decreases with treatment and a positive score indicates the opposite effect. 
-                      <b>All values are extremely sensitive to outliers. Please interpret with caution.</b> 
+                      <b>All values are extremely sensitive to outliers. Please interpret with caution and
+                      select rows to check for linearity.</b> 
                       A complete data table including the measured intensities can be downloaded below.")),
                p(HTML("<b>NOTE: There is reason to believe that DMSO-0hr was mishandled or mislabeled (see 
                              heatmap under \"Ratio\" page). It is thus omitted before applying the linear model.</b>")),
@@ -612,7 +649,8 @@ ui = navbarPage(
                       to meet this criterion. Scores are computed by subtracting the slopes of the 
                       DMSO control from those of the treatment group. A negative score suggests that the rate of 
                       synthesis decreases with treatment and a positive score indicates the opposite effect. 
-                      <b>All values are extremely sensitive to outliers. Please interpret with caution.</b> 
+                      <b>All values are extremely sensitive to outliers. Please interpret with caution and
+                      select rows to check for linearity.</b>  
                       A complete data table including the measured intensities can be downloaded below.")),
                p(HTML("<b>NOTE: There is reason to believe that DMSO-0hr was mishandled or mislabeled (see 
                              heatmap under \"Ratio\" page). It is thus omitted before applying the linear model.</b>")),
@@ -724,7 +762,8 @@ ui = navbarPage(
                              to meet this criterion. Scores are computed by subtracting the slopes of the 
                              DMSO control from those of the treatment group. A negative score suggests that the rate of 
                              degradation increases with treatment while a positive score indicates the opposite effect. 
-                             <b>All values are extremely sensitive to outliers. Please interpret with caution.</b> 
+                             <b>All values are extremely sensitive to outliers. Please interpret with caution and
+                             select rows to check for linearity.</b>  
                              A complete data table including the measured intensities can be downloaded below.")),
                       p(HTML("<b>NOTE: There is reason to believe that DMSO-0hr was mishandled or mislabeled (see 
                              heatmap under \"Ratio\" page). It is thus omitted before applying the linear model.</b>")),
@@ -740,7 +779,8 @@ ui = navbarPage(
                              to meet this criterion. Scores are computed by subtracting the slopes of the 
                              DMSO control from those of the treatment groups. A negative score suggests that the rate of 
                              degradation increases with treatment while a positive score indicates the opposite effect. 
-                             <b>All values are extremely sensitive to outliers. Please interpret with caution.</b> 
+                             <b>All values are extremely sensitive to outliers. Please interpret with caution and
+                             select rows to check for linearity.</b>  
                              A complete data table including the measured intensities can be downloaded below.")),
                       p(HTML("<b>NOTE: There is reason to believe that DMSO-0hr was mishandled or mislabeled (see 
                              heatmap under \"Ratio\" page). It is thus omitted before applying the linear model.</b>")),
@@ -852,7 +892,8 @@ ui = navbarPage(
                              to meet this criterion. Scores are computed by subtracting the slopes of the 
                              DMSO control from those of the treatment groups. A negative score suggests that the rate of 
                              protein turnover is reduced with treatment while a positive score indicates the opposite effect. 
-                             <b>All values are extremely sensitive to outliers. Please interpret with caution.</b> 
+                             <b>All values are extremely sensitive to outliers. Please interpret with caution and
+                             select rows to check for linearity.</b>  
                              A complete data table including the ratios can be downloaded below.")),
                       p(HTML("<b>NOTE: There is reason to believe that DMSO-0hr was mishandled or mislabeled (see 
                              heatmap under \"Ratio\" page). It is thus omitted before applying the linear model.</b>")),
@@ -868,7 +909,8 @@ ui = navbarPage(
                              to meet this criterion. Scores are computed by subtracting the slopes of the 
                              DMSO control from those of the treatment groups. A negative score suggests that the rate of 
                              protein turnover is reduced with treatment while a positive score indicates the opposite effect. 
-                             <b>All values are extremely sensitive to outliers. Please interpret with caution.</b> 
+                             <b>All values are extremely sensitive to outliers. Please interpret with caution and
+                             select rows to check for linearity.</b>  
                              A complete data table including the ratios can be downloaded below.")),
                       p(HTML("<b>NOTE: There is reason to believe that DMSO-0hr was mishandled or mislabeled (see 
                              heatmap under \"Ratio\" page). It is thus omitted before applying the linear model.</b>")),
@@ -947,7 +989,7 @@ ui = navbarPage(
 
 
 # SERVER ------------------------------------------------------------------
-server = function(input, output) {
+server = function(input, output, session) {
   
   # HEAVY PAGE --------------------------------------------------
   # HEAVY: Data tables after applying filter
@@ -1019,7 +1061,9 @@ server = function(input, output) {
       options = list(
         lengthMenu = list(c(10, 20, 50, 100, -1), c("10", "20", "50", "100", "ALL")),
         pageLength = 10
-      )
+      ),
+      selection = "single",
+      colnames = c('ID' = 1)
     )
   )
   
@@ -1030,9 +1074,45 @@ server = function(input, output) {
       options = list(
         lengthMenu = list(c(10, 20, 50, 100, -1), c("10", "20", "50", "100", "ALL")),
         pageLength = 10
-      )
+      ),
+      selection = "single",
+      colnames = c('ID' = 1)
     )
   )
+
+  # HEAVY: Filtered Table Line Plot (in modal dialog)
+  ID_filtered_heavy = reactive({ rownames(heavy_table_filtered()[input$filtered_table_heavy_rows_selected, ]) })
+  output$line_plot_heavy_filtered = renderPlot({
+    line_plot(heavy_df(), ID_filtered_heavy(),
+              c("^LOG2.*DMSO(?!_0hr)", "^LOG2.*M1071", "^LOG2.*Rapa"),
+              c("DMSO", "M1071", "Rapa"))
+  })
+  observeEvent(input$filtered_table_heavy_rows_selected,
+               {
+                 showModal(modalDialog(
+                   title = heavy_df()[ID_filtered_heavy(), "Gene.name"],
+                   plotOutput("line_plot_heavy_filtered"),
+                   easyClose = TRUE,
+                   footer = NULL
+                 ))
+               })
+  
+  # HEAVY: Raw Table Line Plot (in modal dialog)
+  ID_raw_heavy = reactive({ rownames(heavy_table_raw()[input$raw_table_heavy_rows_selected, ]) })
+  output$line_plot_heavy_raw = renderPlot({
+    line_plot(heavy_df(), ID_raw_heavy(), 
+              c("^LOG2.*DMSO(?!_0hr)", "^LOG2.*M1071", "^LOG2.*Rapa"), 
+              c("DMSO", "M1071", "Rapa"))
+  })
+  observeEvent(input$raw_table_heavy_rows_selected,
+               {
+                 showModal(modalDialog(
+                   title = heavy_df()[ID_raw_heavy(), "Gene.name"],
+                   plotOutput("line_plot_heavy_raw"),
+                   easyClose = TRUE,
+                   footer = NULL
+                 ))
+               })
   
   # HEAVY: Download Filtered Table
   output$DL_filtered_heavy <- downloadHandler(
@@ -1121,7 +1201,9 @@ server = function(input, output) {
       options = list(
         lengthMenu = list(c(10, 20, 50, 100, -1), c("10", "20", "50", "100", "ALL")),
         pageLength = 10
-      )
+      ),
+      selection = "single",
+      colnames = c('ID' = 1)
     )
   )
   
@@ -1132,9 +1214,45 @@ server = function(input, output) {
       options = list(
         lengthMenu = list(c(10, 20, 50, 100, -1), c("10", "20", "50", "100", "ALL")),
         pageLength = 10
-      )
+      ),
+      selection = "single",
+      colnames = c('ID' = 1)
     )
   )
+  
+  # LIGHT: Filtered Table Line Plot (in modal dialog)
+  ID_filtered_light = reactive({ rownames(light_table_filtered()[input$filtered_table_light_rows_selected, ]) })
+  output$line_plot_light_filtered = renderPlot({
+    line_plot(light_df(), ID_filtered_light(),
+              c("^LOG2.*DMSO(?!_0hr)", "^LOG2.*M1071", "^LOG2.*Rapa"),
+              c("DMSO", "M1071", "Rapa"))
+  })
+  observeEvent(input$filtered_table_light_rows_selected,
+               {
+                 showModal(modalDialog(
+                   title = light_df()[ID_filtered_light(), "Gene.name"],
+                   plotOutput("line_plot_light_filtered"),
+                   easyClose = TRUE,
+                   footer = NULL
+                 ))
+               })
+  
+  # LIGHT: Raw Table Line Plot (in modal dialog)
+  ID_raw_light = reactive({ rownames(light_table_raw()[input$raw_table_light_rows_selected, ]) })
+  output$line_plot_light_raw = renderPlot({
+    line_plot(light_df(), ID_raw_light(), 
+              c("^LOG2.*DMSO(?!_0hr)", "^LOG2.*M1071", "^LOG2.*Rapa"), 
+              c("DMSO", "M1071", "Rapa"))
+  })
+  observeEvent(input$raw_table_light_rows_selected,
+               {
+                 showModal(modalDialog(
+                   title = light_df()[ID_raw_light(), "Gene.name"],
+                   plotOutput("line_plot_light_raw"),
+                   easyClose = TRUE,
+                   footer = NULL
+                 ))
+               })
   
   # LIGHT: Download Filtered Table
   output$DL_filtered_light <- downloadHandler(
@@ -1223,7 +1341,9 @@ server = function(input, output) {
       options = list(
         lengthMenu = list(c(10, 20, 50, 100, -1), c("10", "20", "50", "100", "ALL")),
         pageLength = 10
-      )
+      ),
+      selection = "single",
+      colnames = c('ID' = 1)
     )
   )
   
@@ -1234,9 +1354,45 @@ server = function(input, output) {
       options = list(
         lengthMenu = list(c(10, 20, 50, 100, -1), c("10", "20", "50", "100", "ALL")),
         pageLength = 10
-      )
+      ),
+      selection = "single",
+      colnames = c('ID' = 1)
     )
   )
+  
+  # RATIO: Filtered Table Line Plot (in modal dialog)
+  ID_filtered_ratio = reactive({ rownames(ratio_table_filtered()[input$filtered_table_ratio_rows_selected, ]) })
+  output$line_plot_ratio_filtered = renderPlot({
+    line_plot(ratio_df(), ID_filtered_ratio(),
+              c("^LOG2.*DMSO(?!_0hr)", "^LOG2.*M1071", "^LOG2.*Rapa"),
+              c("DMSO", "M1071", "Rapa"))
+  })
+  observeEvent(input$filtered_table_ratio_rows_selected,
+               {
+                 showModal(modalDialog(
+                   title = ratio_df()[ID_filtered_ratio(), "Gene.name"],
+                   plotOutput("line_plot_ratio_filtered"),
+                   easyClose = TRUE,
+                   footer = NULL
+                 ))
+               })
+  
+  # RATIO: Raw Table Line Plot (in modal dialog)
+  ID_raw_ratio = reactive({ rownames(ratio_table_raw()[input$raw_table_ratio_rows_selected, ]) })
+  output$line_plot_ratio_raw = renderPlot({
+    line_plot(ratio_df(), ID_raw_ratio(), 
+              c("^LOG2.*DMSO(?!_0hr)", "^LOG2.*M1071", "^LOG2.*Rapa"), 
+              c("DMSO", "M1071", "Rapa"))
+  })
+  observeEvent(input$raw_table_ratio_rows_selected,
+               {
+                 showModal(modalDialog(
+                   title = ratio_df()[ID_raw_ratio(), "Gene.name"],
+                   plotOutput("line_plot_ratio_raw"),
+                   easyClose = TRUE,
+                   footer = NULL
+                 ))
+               })
   
   # RATIO: Download Filtered Table
   output$DL_filtered_ratio <- downloadHandler(
