@@ -1,0 +1,10 @@
+name: deploydirectory
+title:
+username:
+account: tony-lin
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 257122
+bundleId: 1177918
+url: https://tony-lin.shinyapps.io/deploydirectory/
+when: 1516082743.09525

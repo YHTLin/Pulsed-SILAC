@@ -422,6 +422,7 @@ summary_stat = function(df) {
 #############################################
 # Step 9 - ShinyApp code
 #############################################
+library(shinythemes)
 library(shiny)
 library(DT)  # For interactive data tables
 
@@ -432,7 +433,66 @@ ui = navbarPage(
   #theme = shinytheme("simplex"),
   
   # ABOUT PAGE ----------------------------------------------
-  tabPanel("About", p("HELLO")),
+  tabPanel("About",
+           h2("Interactive Proteomics"),
+           hr(),
+           fluidRow(
+             column(8,
+               h3("Motivation"),
+               p(HTML("The aim of this study is to identify proteins whose biosyntheses are disrupted 
+                      by mTOR inhibitors
+                      rapamycin and RapaLink-1 (M1071) in vivo. To this end, we have employed mass 
+                      spectrometry-based proteomics in conjunction with a technique called stable isotope 
+                      labeling with amino acids in cell culture (SILAC). This webpage helps showcase
+                      and visualize the proteomics data in an interactive way.")),
+               br(),
+               h3("Experimental Design"),
+               p(HTML("To start, GTML5 mouse cells were conditioned in light SILAC media (Arg-0 and Lys-0). 
+                      When fully light-labeled, the cells were split into three flasks containing 
+                      heavy SILAC media (Arg-10 and Lys-8) and immediately treated with DMSO, M1071, 
+                      or rapamycin. Cultures from each condition were harvested at the 3-hour, 6-hour,
+                      12-hour, and 24-hour timepoint. The process was repeated for
+                      a biological replicate.")),
+               br(),
+               h3("Sample Preparation"),
+               p(HTML("A standard proteomics workflow was followed to prepare the samples for liquid
+                      chromatography-tandem mass spectrometry (LC-MS/MS) analysis on a Thermo
+                      Q-Exactive Plus. Cell lysis, protein digestion, and peptide clean-up were 
+                      performed prior to data acquisition on a 4-hour gradient. <b>Both biological 
+                      replicates were prepped but only one was analyzed by LC-MS/MS and included
+                      in the current analysis.</b>")),
+               br(),
+               h3("Data Analysis"),
+               p(HTML("The acquired data were analyzed by the proteomics software MaxQuant to
+                      match the identified spectra to peptides and to derive quantitative measures
+                      of protein abundance. Appropriate SILAC settings were used to detect both 
+                      light- and heavy-labeled proteins across all samples. Please visit the 
+                      <b>Download</b> page for the raw MaxQuant output.")),
+               p(HTML("The MaxQuant output was processed in a series of steps prior to visualization.
+                      First, the data were cleaned and organized into three data types: 
+                      <b>Heavy</b>, <b>Light</b>, and <b>Ratio</b> representing the protein abundance
+                      in the heavy channel, protein abundance in the light channel, and the
+                      heavy-to-light ratio, respectively. For more information on how MaxQuant
+                      determines these values, please see the "),
+                 a("documentation", href = "https://www.nature.com/articles/nprot.2016.136", target="_blank"),
+                 HTML("online.")),
+               p(HTML("Next, the protein intensity values were log<sub>2</sub>-transformed and 
+                      and corrected
+                      to account for the variability in sample injection on the mass spectrometer.
+                      These values are reported in the <b>LOG2</b> columns in the downloadable CSVs.
+                      Additionally, in order to account for the varying baseline protein abundances, the 
+                      <b>NORM</b> columns were computed by taking the difference between the 
+                      log<sub>2</sub>-transformed intensity of a protein in a sample and its 
+                      corresponding value in the DMSO 0-hour control.")),
+               p(HTML("Finally, a filter to remove missing values can be applied independently to 
+                      each of the analysis pages above. The controls are initialized at the most selective 
+                      threshold and can be adjusted by the user. Take note that some graphics may 
+                      throw an error at low thresholds."))
+               )
+             ),
+           hr(),
+           helpText("Please direct any questions to Tony Lin (lin.yu.hsiu@ucsf.edu).")
+  ),
   
   # HEAVY PAGE ----------------------------------------------
   tabPanel("Heavy",
@@ -534,7 +594,7 @@ ui = navbarPage(
                       as the independent variable while the intensities as the dependent. At least two
                       data points are required for modeling. No slopes are reported for those that fail 
                       to meet this criterion. Scores are computed by subtracting the slopes of the 
-                      treatment group from those of DMSO control. A negative score suggests that the rate of 
+                      DMSO control from those of the treatment group. A negative score suggests that the rate of 
                       synthesis decreases with treatment and a positive score indicates the opposite effect. 
                       <b>All values are extremely sensitive to outliers. Please interpret with caution.</b> 
                       A complete data table including the measured intensities can be downloaded below.")),
@@ -550,7 +610,7 @@ ui = navbarPage(
                       as the independent variable while the intensities as the dependent. At least two
                       data points are required for modeling. No slopes are reported for those that fail 
                       to meet this criterion. Scores are computed by subtracting the slopes of the 
-                      treatment group from those of DMSO control. A negative score suggests that the rate of 
+                      DMSO control from those of the treatment group. A negative score suggests that the rate of 
                       synthesis decreases with treatment and a positive score indicates the opposite effect. 
                       <b>All values are extremely sensitive to outliers. Please interpret with caution.</b> 
                       A complete data table including the measured intensities can be downloaded below.")),
@@ -662,7 +722,7 @@ ui = navbarPage(
                              as the independent variable while the intensities as the dependent. At least two
                              data points are required for modeling. No slopes are reported for those that fail 
                              to meet this criterion. Scores are computed by subtracting the slopes of the 
-                             treatment group from those of DMSO control. A negative score suggests that the rate of 
+                             DMSO control from those of the treatment group. A negative score suggests that the rate of 
                              degradation increases with treatment while a positive score indicates the opposite effect. 
                              <b>All values are extremely sensitive to outliers. Please interpret with caution.</b> 
                              A complete data table including the measured intensities can be downloaded below.")),
@@ -678,7 +738,7 @@ ui = navbarPage(
                              as the independent variable while the intensities as the dependent. At least two
                              data points are required for modeling. No slopes are reported for those that fail 
                              to meet this criterion. Scores are computed by subtracting the slopes of the 
-                             treatment group from those of DMSO control. A negative score suggests that the rate of 
+                             DMSO control from those of the treatment groups. A negative score suggests that the rate of 
                              degradation increases with treatment while a positive score indicates the opposite effect. 
                              <b>All values are extremely sensitive to outliers. Please interpret with caution.</b> 
                              A complete data table including the measured intensities can be downloaded below.")),
@@ -790,7 +850,7 @@ ui = navbarPage(
                              as the independent variable while the measured ratios as the dependent. At least two
                              data points are required for modeling. No slopes are reported for those that fail 
                              to meet this criterion. Scores are computed by subtracting the slopes of the 
-                             treatment group from those of DMSO control. A negative score suggests that the rate of 
+                             DMSO control from those of the treatment groups. A negative score suggests that the rate of 
                              protein turnover is reduced with treatment while a positive score indicates the opposite effect. 
                              <b>All values are extremely sensitive to outliers. Please interpret with caution.</b> 
                              A complete data table including the ratios can be downloaded below.")),
@@ -806,7 +866,7 @@ ui = navbarPage(
                              as the independent variable while the measured ratios as the dependent. At least two
                              data points are required for modeling. No slopes are reported for those that fail 
                              to meet this criterion. Scores are computed by subtracting the slopes of the 
-                             treatment group from those of DMSO control. A negative score suggests that the rate of 
+                             DMSO control from those of the treatment groups. A negative score suggests that the rate of 
                              protein turnover is reduced with treatment while a positive score indicates the opposite effect. 
                              <b>All values are extremely sensitive to outliers. Please interpret with caution.</b> 
                              A complete data table including the ratios can be downloaded below.")),
@@ -826,14 +886,22 @@ ui = navbarPage(
              tabPanel("Full Incorporation",
                       fluidRow(
                         column(3, br(),  # Vertical spacing
-                               p(HTML("DESCRIPTION"))
+                               p(HTML("Histograms comparing the distribution of SILAC heavy- and 
+                                      light-labeled proteins are shown here for two samples. 
+                                      The <b>Heavy incorporation</b> sample was processed 
+                                      after passaging GTML5 cells four times in heavy 
+                                      SILAC media. <b>Light incorporation</b> refers to the DMSO 
+                                      0-hr sample, which was conditioned in light SILAC media in 
+                                      preparation for pulsed SILAC proteomics."))
                         ),
                         column(9, br(), plotOutput("HL_full_incorp", height = "350px", width = "800px")))
              ),
              tabPanel("Partial Incorporation",
                       fluidRow(
                         column(3, br(),  # Vertical spacing
-                               p(HTML("DESCRIPTION")),
+                               p(HTML("Validation of heavy label incorporation and light label reduction
+                                      across timepoints is shown on the right. Histograms are organized 
+                                      by conditions and timepoints.")),
                                hr(),
                                selectInput('HL_partial_label_display', 'Display Type:',
                                            c("NORM", "LOG2"), selectize = FALSE),
@@ -841,14 +909,16 @@ ui = navbarPage(
                                  to the DMSO 0-hour timepoint.")
                         ),
                         column(9, br(),
-                               h4("Compare SILAC Labeling"),
+                               h4("Compare SILAC Labeling Across Timepoints"),
                                plotOutput("HL_partial_label", height = "600px", width = "900px")
                         )
                       ),
                       hr(),
                       fluidRow(
                         column(3, br(),  # Vertical spacing
-                               p(HTML("DESCRIPTION")),
+                               p(HTML("Validation that changes in protein ratio can be expressed as a  
+                                      function with a greater weight on protein synthesis than degradation. 
+                                      Histograms are organized by conditions and SILAC labels.")),
                                hr(),
                                selectInput('HL_partial_time_display', 'Display Type:',
                                            c("NORM", "LOG2"), selectize = FALSE),
@@ -856,7 +926,7 @@ ui = navbarPage(
                                         to the DMSO 0-hour timepoint.")
                                ),
                         column(9, br(),
-                               h4("Compare Timepoints"),
+                               h4("Compare Timepoints Between SILAC Labels"),
                                plotOutput("HL_partial_time", height = "600px", width = "900px")
                         )
                       )
@@ -868,7 +938,7 @@ ui = navbarPage(
   tabPanel("Download",
            h2("Download MaxQuant Output"),
            hr(),
-           p(HTML("This interactive webpage is built on the <em>Protein Groups</em> output from MaxQuant.")),
+           p(HTML("This interactive webpage is built on the <b>Protein Groups</b> output from MaxQuant.")),
            p(HTML("The data file is available below.")),
            downloadButton("DL_maxquant", "Download CSV")
   )
@@ -876,7 +946,7 @@ ui = navbarPage(
 
 
 
-# SERVER -------------------------------------------------------
+# SERVER ------------------------------------------------------------------
 server = function(input, output) {
   
   # HEAVY PAGE --------------------------------------------------
@@ -1230,5 +1300,6 @@ shinyApp(ui = ui, server = server)
 # Step 9 - Deploy App!
 #############################################
 # Copy and run code in console
+#library(rsconnect)
 #setwd('C:/Users/Tony Lin/Desktop/Wiita_lab/Projects/Proteomics_project/Pulsed_silac_Ozlem/Proteomics/analysis/deployDirectory')
 #deployApp()
