@@ -1025,23 +1025,23 @@ server = function(input, output, session) {
   # HEAVY: Output pairwise plot
   output$pair_plot_heavy_DMSO <- renderPlot({ 
     if (input$pair_plot_heavy_display == "LOG2") {
-      plot_pairs(heavy_df(), "^LOG2.*DMSO")
+      plot_pairs(heavy_df(), "^LOG2.*DMSO", use_keep = TRUE)
     } else {
-      plot_pairs(heavy_df(), "^NORM.*DMSO")
+      plot_pairs(heavy_df(), "^NORM.*DMSO", use_keep = TRUE)
     }
   })
   output$pair_plot_heavy_M1071 <- renderPlot({ 
     if (input$pair_plot_heavy_display == "LOG2") {
-      plot_pairs(heavy_df(), "^LOG2.*M1071")
+      plot_pairs(heavy_df(), "^LOG2.*M1071", use_keep = TRUE)
     } else {
-      plot_pairs(heavy_df(), "^NORM.*M1071")
+      plot_pairs(heavy_df(), "^NORM.*M1071", use_keep = TRUE)
     }
   })
   output$pair_plot_heavy_Rapa <- renderPlot({ 
     if (input$pair_plot_heavy_display == "LOG2") {
-      plot_pairs(heavy_df(), "^LOG2.*Rapa")
+      plot_pairs(heavy_df(), "^LOG2.*Rapa", use_keep = TRUE)
     } else {
-      plot_pairs(heavy_df(), "^NORM.*Rapa")
+      plot_pairs(heavy_df(), "^NORM.*Rapa", use_keep = TRUE)
     }
   })
   
@@ -1165,23 +1165,23 @@ server = function(input, output, session) {
   # LIGHT: Output pairwise plot
   output$pair_plot_light_DMSO <- renderPlot({ 
     if (input$pair_plot_light_display == "LOG2") {
-      plot_pairs(light_df(), "^LOG2.*DMSO")
+      plot_pairs(light_df(), "^LOG2.*DMSO", use_keep = TRUE)
     } else {
-      plot_pairs(light_df(), "^NORM.*DMSO")
+      plot_pairs(light_df(), "^NORM.*DMSO", use_keep = TRUE)
     }
   })
   output$pair_plot_light_M1071 <- renderPlot({ 
     if (input$pair_plot_light_display == "LOG2") {
-      plot_pairs(light_df(), "^LOG2.*M1071")
+      plot_pairs(light_df(), "^LOG2.*M1071", use_keep = TRUE)
     } else {
-      plot_pairs(light_df(), "^NORM.*M1071")
+      plot_pairs(light_df(), "^NORM.*M1071", use_keep = TRUE)
     }
   })
   output$pair_plot_light_Rapa <- renderPlot({ 
     if (input$pair_plot_light_display == "LOG2") {
-      plot_pairs(light_df(), "^LOG2.*Rapa")
+      plot_pairs(light_df(), "^LOG2.*Rapa", use_keep = TRUE)
     } else {
-      plot_pairs(light_df(), "^NORM.*Rapa")
+      plot_pairs(light_df(), "^NORM.*Rapa", use_keep = TRUE)
     }
   })
   
@@ -1305,23 +1305,23 @@ server = function(input, output, session) {
   # RATIO: Output pairwise plot
   output$pair_plot_ratio_DMSO <- renderPlot({ 
     if (input$pair_plot_ratio_display == "LOG2") {
-      plot_pairs(ratio_df(), "^LOG2.*DMSO")
+      plot_pairs(ratio_df(), "^LOG2.*DMSO", use_keep = TRUE)
     } else {
-      plot_pairs(ratio_df(), "^NORM.*DMSO")
+      plot_pairs(ratio_df(), "^NORM.*DMSO", use_keep = TRUE)
     }
   })
   output$pair_plot_ratio_M1071 <- renderPlot({ 
     if (input$pair_plot_ratio_display == "LOG2") {
-      plot_pairs(ratio_df(), "^LOG2.*M1071")
+      plot_pairs(ratio_df(), "^LOG2.*M1071", use_keep = TRUE)
     } else {
-      plot_pairs(ratio_df(), "^NORM.*M1071")
+      plot_pairs(ratio_df(), "^NORM.*M1071", use_keep = TRUE)
     }
   })
   output$pair_plot_ratio_Rapa <- renderPlot({ 
     if (input$pair_plot_ratio_display == "LOG2") {
-      plot_pairs(ratio_df(), "^LOG2.*Rapa")
+      plot_pairs(ratio_df(), "^LOG2.*Rapa", use_keep = TRUE)
     } else {
-      plot_pairs(ratio_df(), "^NORM.*Rapa")
+      plot_pairs(ratio_df(), "^NORM.*Rapa", use_keep = TRUE)
     }
   })
   
