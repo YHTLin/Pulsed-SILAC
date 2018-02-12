@@ -1,5 +1,5 @@
 # Pulsed-SILAC
-Analysis of ribosome profiling data on the effect of mTOR inhibitors in GTML5 mouse cells.
+Analysis of pulsed-SILAC proteomics data on the effect of mTOR inhibitors in GTML5 mouse cells.
 
 ## Motivation
 Signaling pathways are responsible for coordinating cell behavior, and when dysregulated they often lead to
@@ -16,7 +16,10 @@ biological processes, such as protein translation, are not well understood. The 
 proteins whose biosyntheses are sensitive to M1071 in the context of neural cells. We aim to monitor changes
 in protein translation using two techniques, ribosome profiling and pulsed SILAC proteomics.
 
-## Instructions
-1. 
-2. 
-3. 
+## File Description
++ *pulsed_SILAC_ozlem.R*: R analysis script
++ *pulsed_SILAC.RData*: Saved workspace after running the script above
++ *deployDirectory/app.R*: Source code behind interactive app.
+
+## Usage
+An interactive web tool, built using ShinyApp in R, is available for visualing the data. Visit the site [here](https://tony-lin.shinyapps.io/deploydirectory/).
