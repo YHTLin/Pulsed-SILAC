@@ -22,4 +22,4 @@ in protein translation using two techniques, ribosome profiling and pulsed SILAC
 + *deployDirectory/app.R*: Source code behind interactive app.
 
 ## Usage
-An interactive web tool, built using ShinyApp in R, is available for visualing the data. Visit the site [here](https://tony-lin.shinyapps.io/deploydirectory/).
+An interactive web tool, built using ShinyApp in R, is available for dynamic data visualization. Visit the site [here](https://tony-lin.shinyapps.io/deploydirectory/).
