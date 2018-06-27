@@ -53,8 +53,8 @@ data[log2Ratio.names] = log2(data[ratio.names])
 # Step 5 - Data organization
 #############################################
 # Organize P4heavy data (heavy incorporation after passage 4)
-protein.info = c("Protein.IDs", "Majority.protein.IDs", "Number.of.proteins", "Peptides", 
-                 "Gene.names", "Protein.ID", "Gene.name")
+protein.info = c("Protein.IDs", "Gene.names", "Protein.ID", "Gene.name",
+                 "Number.of.proteins", "Peptides")
 P4heavy.names = c("LOG2.L.Heavy_incorp", "LOG2.H.Heavy_incorp", 
                   "LOG2.H.L.Heavy_incorp", "Ratio.H.L.count.Heavy_incorp")
 P4heavy = dplyr::select(data, c(protein.info, P4heavy.names))
@@ -78,36 +78,7 @@ rm(protein.info, light.names, heavy.names, HL.names)
 
 
 #############################################
-# Step 6 - Data normalization (light and heavy channels)
-#############################################
-# Perform global median normalization to correct for variable sample concentration/injection volume
-# Adjust the light and heavy intensity by a normalization factor calculated from the combined intensity
-### NOT NECESSARY FOR LFQ INTENSITIES
-
-# Normalize light and heavy channel data to DMSO 0hr
-DMSO_norm = function(df) {
-  # df = dataframe containing filtered and normalized light or heavy channel data
-  log.names = grep("^LOG2.*(3hr|6hr|12hr|24hr)", names(df), value = TRUE)
-  zero.name = grep("^LOG2.*0hr", names(df), value = TRUE)
-  
-  matr = as.matrix(df[log.names])  # Casting required for the following operation
-  for (i in 1:nrow(matr)) {
-    if (!is.infinite(df[i, zero.name]) & !is.na(df[i, zero.name])) {
-      matr[i, ] = matr[i, ] - df[i, zero.name]
-    }
-  }
-  
-  norm.names = sub("^LOG2", "NORM", log.names)
-  df[norm.names] = matr
-  return(df)
-}
-lightD = DMSO_norm(light)
-heavyD = DMSO_norm(heavy)
-ratioD = DMSO_norm(ratio)
-
-
-#############################################
-# Step 7 - Score treatment/control rate of change in intensity over time
+# Step 6 - Score treatment/control rate of change in intensity over time
 #############################################
 # Use the LOG2 or NORM columns to calculate slope of linear regression
 score = function(df, sample.names, suffix) {
@@ -116,15 +87,19 @@ score = function(df, sample.names, suffix) {
   # sample.names = vector of regex patterns for extracting column names for each condition
   # suffix = character vector describing the name of each condition for output
   
+  # Organize sample names by treatment
   log.names = lapply(sample.names, function(x) grep(x, names(df), value = TRUE, perl = TRUE)) #perl = TRUE enables negative lookahead
+  
+  # Create time vs intensity matrix for each protein in every condition
   df2 = lapply(log.names, function(x) {   # Loop through each condition
     x = mixedsort(x)  # order the columns alphanumerically
     apply(df[x], 1, function(y) data.frame(time = 1:length(y), value = y))  # Loop through each row
   })
+  
   # Apply linear model after excluding -Inf or NA rows
   slopes = lapply(df2, function(x) {   # Loop through each condition
     sapply(x, function(y) {
-      y = y[!is.infinite(y$value) & !is.na(y$value), ]   # Remove -Inf or NA rows
+      y = filter(y, is.finite(value))   # Remove -Inf or NA rows
       if (nrow(y) > 1) {   # Only perform linear regression if two or more data points are available
         x = lm(value ~ time, y)
         c(x$coefficients[2], summary(x)$r.squared) # Extract slope and r-squared from linear model
@@ -134,69 +109,81 @@ score = function(df, sample.names, suffix) {
     })
   })
   slopes = lapply(slopes, t)
+  
   # Output columns
   for (i in 1:length(suffix)) {
     df[paste0(c("slope_", "rSquared_"), suffix[i])] = slopes[[i]]
   }
+  
   return(df)
 }
 # score_ is the difference in slope between treatment and DMSO control
 # IGNORE DMSO_0HR IN LINEAR REGRESSION BECAUSE HEATMAP SUGGESTS THAT THE SAMPLE COULD BE MISLABLED
-lightDS = score(lightD, c("^LOG2.*DMSO(?!_0hr)", "^LOG2.*M1071", "^LOG2.*Rapa"), c("DMSO", "M1071", "Rapa"))
-lightDS = mutate(lightDS, score_M1071 = slope_M1071 - slope_DMSO)
-lightDS = mutate(lightDS, score_Rapa = slope_Rapa - slope_DMSO)
-heavyDS = score(heavyD, c("^LOG2.*DMSO(?!_0hr)", "^LOG2.*M1071", "^LOG2.*Rapa"), c("DMSO", "M1071", "Rapa"))
-heavyDS = mutate(heavyDS, score_M1071 = slope_M1071 - slope_DMSO)
-heavyDS = mutate(heavyDS, score_Rapa = slope_Rapa - slope_DMSO)
-ratioDS = score(ratioD, c("^LOG2.*DMSO(?!_0hr)", "^LOG2.*M1071", "^LOG2.*Rapa"), c("DMSO", "M1071", "Rapa"))
-ratioDS = mutate(ratioDS, score_M1071 = slope_M1071 - slope_DMSO)
-ratioDS = mutate(ratioDS, score_Rapa = slope_Rapa - slope_DMSO)
+lightS = score(light, c("^LOG2.*DMSO(?!_0hr)", "^LOG2.*M1071", "^LOG2.*Rapa"), c("DMSO", "M1071", "Rapa"))
+lightS = mutate(lightS, score_M1071 = slope_M1071 - slope_DMSO)
+lightS = mutate(lightS, score_Rapa = slope_Rapa - slope_DMSO)
+heavyS = score(heavy, c("^LOG2.*DMSO(?!_0hr)", "^LOG2.*M1071", "^LOG2.*Rapa"), c("DMSO", "M1071", "Rapa"))
+heavyS = mutate(heavyS, score_M1071 = slope_M1071 - slope_DMSO)
+heavyS = mutate(heavyS, score_Rapa = slope_Rapa - slope_DMSO)
+ratioS = score(ratio, c("^LOG2.*DMSO(?!_0hr)", "^LOG2.*M1071", "^LOG2.*Rapa"), c("DMSO", "M1071", "Rapa"))
+ratioS = mutate(ratioS, score_M1071 = slope_M1071 - slope_DMSO)
+ratioS = mutate(ratioS, score_Rapa = slope_Rapa - slope_DMSO)
 
 
 #############################################
 # Step 8 - Data Filtering Function
 #############################################
 # Filter out missing values
-filter_valids = function(df, conditions, min_count, 
-                         is_infinite = TRUE, at_least_one = FALSE) {
+filter_valids = function(df, conditions, min_count, at_least_one = FALSE,
+                         special_cond = NA, special_filter = NA) {
   # df = data frame containing LOG2 data for filtering and organized by data type
   # conditions = a character vector dictating the grouping
   # min_count = a numeric vector of the same length as "conditions" indicating the minimum 
   #     number of valid values for each condition for retention
-  # is_infinite = Boolean indicating the nature of missing data
-  #     if TRUE, counts Inf/-Inf values as missing values
-  #     if FALSE, counts NaN values as missing values
   # at_least_one = TRUE means to keep the row if min_count is met for at least one condition
   #     FALSE means min_count must be met across all conditions for retention
+  # special_cond = a character vector of regex patterns for isolating certain samples/conditions
+  # special_filter = a logical vector of same length as special_cond indicating whether to
+  #     require quantification in the conditions listed in special_cond
   require(dplyr)
   
-  log2.names = names(dplyr::select(df, starts_with("LOG2")))   # Extract LOG2 columns
+  log2.names = grep("^LOG2", names(df), value = TRUE)   # Extract LOG2 column names
+  if (!is.na(special_cond[1])) {
+    # Extract names of samples requiring their own filtering
+    special.names = unlist(sapply(special_cond, 
+                                  function(x) grep(x, log2.names, value = TRUE)))
+    log2.names = log2.names[!(log2.names %in% special.names)]
+  }
   cond.names = lapply(conditions, # Group column names by conditions
                       function(x) grep(x, log2.names, value = TRUE))
   
-  if (is_infinite) {
-    cond.filter = sapply(1:length(cond.names), function(i) {
-      df2 = df[cond.names[[i]]]   # Extract columns of interest
-      df2 = as.matrix(df2)   # Cast as matrix for the following command
-      sums = rowSums(!is.infinite(df2)) # count the number of valid values for each condition
-      sums >= min_count[i]   # Calculates whether min_count requirement is met
-    })
-  } else {
-    cond.filter = sapply(1:length(cond.names), function(i) {
-      df2 = df[cond.names[[i]]]   # Extract columns of interest
-      df2 = as.matrix(df2)   # Cast as matrix for the following command
-      sums = rowSums(!is.nan(df2)) # count the number of valid values for each condition
-      sums >= min_count[i]   # Calculates whether min_count requirement is met
-    })
-  }
+  # Apply filter to "conditions"
+  cond.filter = sapply(1:length(cond.names), function(i) {
+    df2 = df[cond.names[[i]]]   # Extract columns of interest
+    df2 = as.matrix(df2)   # Cast as matrix for the following command
+    sums = rowSums(is.finite(df2)) # count the number of valid values for each condition
+    sums >= min_count[i]   # Calculates whether min_count requirement is met
+  })
   
   if (at_least_one) {
-    df$KEEP = apply(cond.filter, 1, any)
+    KEEP = apply(cond.filter, 1, any)
   } else {
-    df$KEEP = apply(cond.filter, 1, all)
+    KEEP = apply(cond.filter, 1, all)
   }
   
-  return(df)  # No rows are omitted, filter rules are listed in the KEEP column
+  # Apply filter to "special"
+  if (!is.na(special_cond[1])) {
+    special.names = special.names[special_filter]
+    special_df = df[special.names]
+    special_df = as.matrix(special_df)
+    KEEP = cbind(KEEP, apply(special_df, 1, 
+                             function(x) all(is.finite(x))))
+    KEEP = apply(KEEP, 1, all)
+  }
+  
+  df$KEEP = KEEP
+    
+  return(df)  # No rows are omitted, filter rules recorded in the KEEP column
 }
 
 
@@ -218,7 +205,7 @@ plot_heatmap = function(df, pattern) {
   
   # Turn invalid values into NA
   plot.df = as.matrix(df[df$KEEP, label])  # Use only filtered rows
-  plot.df[is.infinite(plot.df) | is.nan(plot.df)] = NA   # Required for superheat
+  plot.df[!is.finite(plot.df)] = NA   # Required for superheat
   colnames(plot.df) = sub(paste0(pattern, "\\."), "", colnames(plot.df))   # name columns
   rownames(plot.df) = df[df$KEEP, "Protein.ID"]   # name rows
   
@@ -374,12 +361,12 @@ summary_stat = function(df) {
   data.frame(
     Sample = sub("(LOG2.L.|LOG2.H.|LOG2.H.L.)", "", names(df2)),
     Raw = sapply(df2, function(x) {
-      paste0(sum(!is.infinite(x) & !is.na(x)), " / ", length(x), 
-             " (", round(sum(!is.infinite(x) & !is.na(x)) / length(x) * 100, 1), "%)")
+      paste0(sum(is.finite(x)), " / ", length(x), 
+             " (", round(sum(is.finite(x)) / length(x) * 100, 1), "%)")
     }),
     Filtered = sapply(df2[df$KEEP,], function(x) {
-      paste0(sum(!is.infinite(x) & !is.na(x)), " / ", length(x), 
-             " (", round(sum(!is.infinite(x) & !is.na(x)) / length(x) * 100, 1), "%)")
+      paste0(sum(is.finite(x)), " / ", length(x), 
+             " (", round(sum(is.finite(x)) / length(x) * 100, 1), "%)")
     })
   )
 }
@@ -445,8 +432,8 @@ ui = navbarPage(
                       by mTOR inhibitors
                       rapamycin and RapaLink-1 (M1071) in vivo. To this end, we have employed mass 
                       spectrometry-based proteomics in conjunction with a technique called stable isotope 
-                      labeling with amino acids in cell culture (SILAC). This webpage helps showcase
-                      and visualize the proteomics data in an interactive way.")),
+                      labeling with amino acids in cell culture (SILAC). This webpage showcases
+                      the proteomic data using interactive visualization.")),
                br(),
                h3("Experimental Design"),
                p(HTML("To start, GTML5 mouse cells were conditioned in light SILAC media (Arg-0 and Lys-0). 
@@ -478,17 +465,11 @@ ui = navbarPage(
                       determines these values, please see the "),
                  a("documentation", href = "https://www.nature.com/articles/nprot.2016.136", target="_blank"),
                  HTML("online.")),
-               p(HTML("Next, the protein intensity values were log<sub>2</sub>-transformed and 
-                      and corrected
-                      to account for the variability in sample injection on the mass spectrometer.
-                      These values are reported in the <b>LOG2</b> columns in the downloadable CSVs.
-                      Additionally, in order to account for the varying baseline protein abundances, the 
-                      <b>NORM</b> columns were computed by taking the difference between the 
-                      log<sub>2</sub>-transformed intensity of a protein in a sample and its 
-                      corresponding value in the DMSO 0-hour control.")),
+               p(HTML("Next, the protein intensity values were log<sub>2</sub>-transformed.
+                      These values are reported in the <b>LOG2</b> columns in the downloadable CSVs.")),
                p(HTML("Finally, a filter to remove missing values can be applied independently to 
                       each of the analysis pages above. The controls are initialized at the most selective 
-                      threshold and can be adjusted by the user. Take note that some graphics may 
+                      threshold and can be adjusted by the user. Note that some graphics may 
                       throw an error at low thresholds."))
                )
              ),
@@ -510,7 +491,7 @@ ui = navbarPage(
       fluidRow(
         # Input for missing value filter: DMSO
         column(4, sliderInput("DMSO_valid_heavy", label = "DMSO",
-                              min = 0, max = 5, value = 5)
+                              min = 0, max = 4, value = 4)
         ),
         # Input for missing value filter: M1071
         column(4, sliderInput("M1071_valid_heavy", label = "M1071", 
@@ -526,10 +507,14 @@ ui = navbarPage(
                    choices = list("Keep observations for which ALL conditions above are met" = FALSE, 
                                   "Keep observations for which ANY condition above is met" = TRUE),
                    selected = FALSE),
+      
+      # Input checkbox for DMSO-0hr quantification
+      checkboxInput("DMSO_quant_heavy", label = "Require quantification in DMSO-0hr", 
+                    value = FALSE),
         
       # Help text
       helpText(HTML("Note: All tabs below will automatically apply the filter. 
-                    Low thresholds could interfere with heatmap construction."))
+                    Low thresholds could interfere with visualization."))
     ),
     
     # CONSTRUCT PAGE TABS
@@ -554,12 +539,7 @@ ui = navbarPage(
                                timepoints are shown at the upper right corner along with lines of best fit 
                                in red. The corresponding correlation coefficients are found at the lower left 
                                corner. Proteins quantified in one sample but not the other are counted as \"missing\".
-                               Data are organized by treatment groups.")),
-                        hr(),
-                        selectInput('pair_plot_heavy_display', 'Display Type:',
-                                    c("NORM", "LOG2"), selectize = FALSE),
-                        helpText("Option to view the data prior to (LOG2) or following (NORM) normalization 
-                                 to the DMSO 0-hour timepoint.")
+                               Data are organized by treatment groups."))
                         ),
                  column(9, br(),
                         h4("DMSO"),
@@ -579,11 +559,7 @@ ui = navbarPage(
                                The samples are organized into columns, and each row shows the 
                                log<sub>2</sub>-transformed intensities for a protein. The sample medians 
                                are plotted as a line chart above the figure. See legend below for 
-                               color scale. Missing values are colored in black.")),
-                        selectInput('heatmap_heavy_display', 'Display Type:',
-                                    c("NORM", "LOG2"), selectize = FALSE),
-                        helpText("Option to view the data prior to (LOG2) or following (NORM) normalization 
-                                 to the DMSO 0-hour timepoint. NORM is recommended.")
+                               color scale. Missing values are colored in black."))
                         ),
                  column(9, br(),
                         plotOutput("heatmap_heavy", height = "700px", width = "450px")
@@ -601,8 +577,7 @@ ui = navbarPage(
                       <b>All values are extremely sensitive to outliers. Please interpret with caution and
                       select rows to check for linearity.</b> 
                       A complete data table including the measured intensities can be downloaded below.")),
-               p(HTML("<b>NOTE: There is reason to believe that DMSO-0hr was mishandled or mislabeled (see 
-                             heatmap under \"Ratio\" page). It is thus omitted before applying the linear model.</b>")),
+               p(HTML("<b>NOTE: DMSO-0hr is omitted when applying the linear model.</b>")),
                downloadButton("DL_filtered_heavy", "Download Filtered CSV"),
                hr(),
                DT::dataTableOutput('filtered_table_heavy')),
@@ -618,8 +593,7 @@ ui = navbarPage(
                       <b>All values are extremely sensitive to outliers. Please interpret with caution and
                       select rows to check for linearity.</b>  
                       A complete data table including the measured intensities can be downloaded below.")),
-               p(HTML("<b>NOTE: There is reason to believe that DMSO-0hr was mishandled or mislabeled (see 
-                             heatmap under \"Ratio\" page). It is thus omitted before applying the linear model.</b>")),
+               p(HTML("<b>NOTE: DMSO-0hr is omitted when applying the linear model.</b>")),
                downloadButton("DL_raw_heavy", "Download Raw CSV"),
                hr(),
                DT::dataTableOutput('raw_table_heavy'))
@@ -640,7 +614,7 @@ ui = navbarPage(
              fluidRow(
                # Input for missing value filter: DMSO
                column(4, sliderInput("DMSO_valid_light", label = "DMSO",
-                                     min = 0, max = 5, value = 5)
+                                     min = 0, max = 4, value = 4)
                ),
                # Input for missing value filter: M1071
                column(4, sliderInput("M1071_valid_light", label = "M1071", 
@@ -657,9 +631,13 @@ ui = navbarPage(
                                          "Keep observations for which ANY condition above is met" = TRUE),
                           selected = FALSE),
              
+             # Input checkbox for DMSO-0hr quantification
+             checkboxInput("DMSO_quant_light", label = "Require quantification in DMSO-0hr", 
+                           value = FALSE),
+             
              # Help text
              helpText(HTML("Note: All tabs below will automatically apply the filter. 
-                           Low thresholds could interfere with heatmap construction."))
+                           Low thresholds could interfere with visualization."))
              ),
            
            # CONSTRUCT PAGE TABS
@@ -684,12 +662,7 @@ ui = navbarPage(
                                       timepoints are shown at the upper right corner along with lines of best fit 
                                       in red. The corresponding correlation coefficients are found at the lower left 
                                       corner. Proteins quantified in one sample but not the other are counted as \"missing\".
-                                      Data are organized by treatment groups.")),
-                               hr(),
-                               selectInput('pair_plot_light_display', 'Display Type:',
-                                           c("NORM", "LOG2"), selectize = FALSE),
-                               helpText("Option to view the data prior to (LOG2) or following (NORM) normalization 
-                                        to the DMSO 0-hour timepoint.")
+                                      Data are organized by treatment groups."))
                                ),
                         column(9, br(),
                                h4("DMSO"),
@@ -709,11 +682,7 @@ ui = navbarPage(
                                       The samples are organized into columns, and each row shows the 
                                       log<sub>2</sub>-transformed intensities for a protein. The sample medians 
                                       are plotted as a line chart above the figure. See legend below for 
-                                      color scale. Missing values are colored in black.")),
-                               selectInput('heatmap_light_display', 'Display Type:',
-                                           c("NORM", "LOG2"), selectize = FALSE),
-                               helpText("Option to view the data prior to (LOG2) or following (NORM) normalization 
-                                        to the DMSO 0-hour timepoint. NORM is recommended.")
+                                      color scale. Missing values are colored in black."))
                                ),
                         column(9, br(),
                                plotOutput("heatmap_light", height = "700px", width = "450px")
@@ -731,8 +700,7 @@ ui = navbarPage(
                              <b>All values are extremely sensitive to outliers. Please interpret with caution and
                              select rows to check for linearity.</b>  
                              A complete data table including the measured intensities can be downloaded below.")),
-                      p(HTML("<b>NOTE: There is reason to believe that DMSO-0hr was mishandled or mislabeled (see 
-                             heatmap under \"Ratio\" page). It is thus omitted before applying the linear model.</b>")),
+                      p(HTML("<b>NOTE: DMSO-0hr is omitted when applying the linear model.</b>")),
                       downloadButton("DL_filtered_light", "Download Filtered CSV"),
                       hr(),
                       DT::dataTableOutput('filtered_table_light')),
@@ -748,8 +716,7 @@ ui = navbarPage(
                              <b>All values are extremely sensitive to outliers. Please interpret with caution and
                              select rows to check for linearity.</b>  
                              A complete data table including the measured intensities can be downloaded below.")),
-                      p(HTML("<b>NOTE: There is reason to believe that DMSO-0hr was mishandled or mislabeled (see 
-                             heatmap under \"Ratio\" page). It is thus omitted before applying the linear model.</b>")),
+                      p(HTML("<b>NOTE: DMSO-0hr is omitted when applying the linear model.</b>")),
                       downloadButton("DL_raw_light", "Download Raw CSV"),
                       hr(),
                       DT::dataTableOutput('raw_table_light'))
@@ -770,7 +737,7 @@ ui = navbarPage(
              fluidRow(
                # Input for missing value filter: DMSO
                column(4, sliderInput("DMSO_valid_ratio", label = "DMSO",
-                                     min = 0, max = 5, value = 5)
+                                     min = 0, max = 4, value = 4)
                ),
                # Input for missing value filter: M1071
                column(4, sliderInput("M1071_valid_ratio", label = "M1071", 
@@ -786,10 +753,14 @@ ui = navbarPage(
                           choices = list("Keep observations for which ALL conditions above are met" = FALSE, 
                                          "Keep observations for which ANY condition above is met" = TRUE),
                           selected = FALSE),
+
+             # Input checkbox for DMSO-0hr quantification
+             checkboxInput("DMSO_quant_ratio", label = "Require quantification in DMSO-0hr", 
+                           value = FALSE),
              
              # Help text
              helpText(HTML("Note: All tabs below will automatically apply the filter. 
-                           Low thresholds could interfere with heatmap construction."))
+                           Low thresholds could interfere with visualization."))
              ),
            
            # CONSTRUCT PAGE TABS
@@ -814,12 +785,7 @@ ui = navbarPage(
                                       timepoints are shown at the upper right corner along with lines of best fit 
                                       in red. The corresponding correlation coefficients are found at the lower left 
                                       corner. Ratios quantified in one sample but not the other are counted as \"missing\". 
-                                      Data are organized by treatment groups.")),
-                               hr(),
-                               selectInput('pair_plot_ratio_display', 'Display Type:',
-                                           c("NORM", "LOG2"), selectize = FALSE),
-                               helpText("Option to view the data prior to (LOG2) or following (NORM) normalization 
-                                        to the DMSO 0-hour timepoint.")
+                                      Data are organized by treatment groups."))
                                ),
                         column(9, br(),
                                h4("DMSO"),
@@ -839,11 +805,7 @@ ui = navbarPage(
                                       The samples are organized into columns, and each row shows the 
                                       log<sub>2</sub>-transformed H/L ratios for a protein. The sample medians 
                                       are plotted as a line chart above the figure. See legend below for 
-                                      color scale. Missing values are colored in black.")),
-                               selectInput('heatmap_ratio_display', 'Display Type:',
-                                           c("NORM", "LOG2"), selectize = FALSE),
-                               helpText("Option to view the data prior to (LOG2) or following (NORM) normalization 
-                                        to the DMSO 0-hour timepoint. NORM is recommended.")
+                                      color scale. Missing values are colored in black."))
                                ),
                         column(9, br(),
                                plotOutput("heatmap_ratio", height = "700px", width = "450px")
@@ -861,8 +823,7 @@ ui = navbarPage(
                              <b>All values are extremely sensitive to outliers. Please interpret with caution and
                              select rows to check for linearity.</b>  
                              A complete data table including the ratios can be downloaded below.")),
-                      p(HTML("<b>NOTE: There is reason to believe that DMSO-0hr was mishandled or mislabeled (see 
-                             heatmap under \"Ratio\" page). It is thus omitted before applying the linear model.</b>")),
+                      p(HTML("<b>NOTE: DMSO-0hr is omitted when applying the linear model.</b>")),
                       downloadButton("DL_filtered_ratio", "Download Filtered CSV"),
                       hr(),
                       DT::dataTableOutput('filtered_table_ratio')),
@@ -878,8 +839,7 @@ ui = navbarPage(
                              <b>All values are extremely sensitive to outliers. Please interpret with caution and
                              select rows to check for linearity.</b>  
                              A complete data table including the ratios can be downloaded below.")),
-                      p(HTML("<b>NOTE: There is reason to believe that DMSO-0hr was mishandled or mislabeled (see 
-                             heatmap under \"Ratio\" page). It is thus omitted before applying the linear model.</b>")),
+                      p(HTML("<b>NOTE: DMSO-0hr is omitted when applying the linear model.</b>")),
                       downloadButton("DL_raw_ratio", "Download Raw CSV"),
                       hr(),
                       DT::dataTableOutput('raw_table_ratio'))
@@ -909,12 +869,7 @@ ui = navbarPage(
                         column(3, br(),  # Vertical spacing
                                p(HTML("Validation of heavy label incorporation and light label reduction
                                       across timepoints is shown on the right. Histograms are organized 
-                                      by conditions and timepoints.")),
-                               hr(),
-                               selectInput('HL_partial_label_display', 'Display Type:',
-                                           c("NORM", "LOG2"), selectize = FALSE),
-                               helpText("Option to view the data prior to (LOG2) or following (NORM) normalization 
-                                 to the DMSO 0-hour timepoint.")
+                                      by conditions and timepoints."))
                         ),
                         column(9, br(),
                                h4("Compare SILAC Labeling Across Timepoints"),
@@ -926,12 +881,7 @@ ui = navbarPage(
                         column(3, br(),  # Vertical spacing
                                p(HTML("Validation that changes in protein ratio can be expressed as a  
                                       function with a greater weight on protein synthesis than degradation. 
-                                      Histograms are organized by conditions and SILAC labels.")),
-                               hr(),
-                               selectInput('HL_partial_time_display', 'Display Type:',
-                                           c("NORM", "LOG2"), selectize = FALSE),
-                               helpText("Option to view the data prior to (LOG2) or following (NORM) normalization 
-                                        to the DMSO 0-hour timepoint.")
+                                      Histograms are organized by conditions and SILAC labels."))
                                ),
                         column(9, br(),
                                h4("Compare Timepoints Between SILAC Labels"),
@@ -947,7 +897,7 @@ ui = navbarPage(
            h2("Download MaxQuant Output"),
            hr(),
            p(HTML("This interactive webpage is built on the <b>Protein Groups</b> output from MaxQuant.")),
-           p(HTML("The data file is available below.")),
+           p(HTML("The raw data file is available below.")),
            downloadButton("DL_maxquant", "Download CSV")
   )
 )
@@ -959,26 +909,27 @@ server = function(input, output, session) {
   
   # HEAVY PAGE --------------------------------------------------
   # HEAVY: Data tables after applying filter
-  heavy_df = reactive({ filter_valids(heavyDS, 
-                                      c("DMSO", "M1071", "Rapa"), is_infinite = TRUE, 
+  heavy_df = reactive({ filter_valids(heavyS, 
+                                      c("DMSO", "M1071", "Rapa"),
                                       c(input$DMSO_valid_heavy, input$M1071_valid_heavy, input$Rapa_valid_heavy), 
-                                      at_least_one = input$filter_type_heavy) 
+                                      at_least_one = input$filter_type_heavy,
+                                      special_cond = "_0hr",
+                                      special_filter = input$DMSO_quant_heavy) 
     })
   heavy_table_raw = reactive({ 
-    outTable = filter_valids(heavyDS,
-                             c("DMSO", "M1071", "Rapa"), is_infinite = TRUE,
-                             c(input$DMSO_valid_heavy, input$M1071_valid_heavy, input$Rapa_valid_heavy),
-                             at_least_one = input$filter_type_heavy)
+    outTable = heavyS
     outTable = outTable[c("Gene.name", "Protein.ID", "slope_DMSO", "slope_M1071", "slope_Rapa", 
                           "score_M1071", "score_Rapa")]
     outTable[3:7] = round(as.matrix(outTable[3:7]), 3)
     return(outTable)
     })
   heavy_table_filtered = reactive({ 
-    outTable = filter_valids(heavyDS,
-                             c("DMSO", "M1071", "Rapa"), is_infinite = TRUE,
+    outTable = filter_valids(heavyS,
+                             c("DMSO", "M1071", "Rapa"),
                              c(input$DMSO_valid_heavy, input$M1071_valid_heavy, input$Rapa_valid_heavy),
-                             at_least_one = input$filter_type_heavy)
+                             at_least_one = input$filter_type_heavy,
+                             special_cond = "_0hr",
+                             special_filter = input$DMSO_quant_heavy)
     outTable = outTable[outTable$KEEP, c("Gene.name", "Protein.ID", "slope_DMSO", "slope_M1071", "slope_Rapa",
                                          "score_M1071", "score_Rapa")]
     outTable[3:7] = round(as.matrix(outTable[3:7]), 3)
@@ -989,35 +940,19 @@ server = function(input, output, session) {
   output$summary_table_heavy <- renderTable({ summary_stat(heavy_df()) })
   
   # HEAVY: Output pairwise plot
-  output$pair_plot_heavy_DMSO <- renderPlot({ 
-    if (input$pair_plot_heavy_display == "LOG2") {
-      plot_pairs(heavy_df(), "^LOG2.*DMSO", use_keep = TRUE)
-    } else {
-      plot_pairs(heavy_df(), "^NORM.*DMSO", use_keep = TRUE)
-    }
+  output$pair_plot_heavy_DMSO <- renderPlot({
+    plot_pairs(heavy_df(), "^LOG2.*DMSO", use_keep = TRUE)
   })
   output$pair_plot_heavy_M1071 <- renderPlot({ 
-    if (input$pair_plot_heavy_display == "LOG2") {
-      plot_pairs(heavy_df(), "^LOG2.*M1071", use_keep = TRUE)
-    } else {
-      plot_pairs(heavy_df(), "^NORM.*M1071", use_keep = TRUE)
-    }
+    plot_pairs(heavy_df(), "^LOG2.*M1071", use_keep = TRUE)
   })
   output$pair_plot_heavy_Rapa <- renderPlot({ 
-    if (input$pair_plot_heavy_display == "LOG2") {
-      plot_pairs(heavy_df(), "^LOG2.*Rapa", use_keep = TRUE)
-    } else {
-      plot_pairs(heavy_df(), "^NORM.*Rapa", use_keep = TRUE)
-    }
+    plot_pairs(heavy_df(), "^LOG2.*Rapa", use_keep = TRUE)
   })
   
   # HEAVY: Output heatmap
   output$heatmap_heavy <- renderPlot({ 
-    if (input$heatmap_heavy_display == "LOG2") {
-      plot_heatmap(heavy_df(), "^LOG2")
-    } else {
-      plot_heatmap(heavy_df(), "^NORM")    
-    }
+    plot_heatmap(heavy_df(), "^LOG2")
   })
   
   # HEAVY: Filtered Table
@@ -1084,7 +1019,8 @@ server = function(input, output, session) {
   output$DL_filtered_heavy <- downloadHandler(
     filename = function() {"filtered_heavy.csv"},
     content = function(file) {
-      write.csv(heavy_df()[heavy_df()$KEEP, -which(names(heavy_df()) == "KEEP")], file, row.names = FALSE)
+      write.csv(heavy_df()[heavy_df()$KEEP, -which(names(heavy_df()) == "KEEP")], 
+                file, row.names = FALSE)
     }   # Remove KEEP column
   )
   
@@ -1099,26 +1035,27 @@ server = function(input, output, session) {
   
   # LIGHT PAGE --------------------------------------------------
   # LIGHT: Data tables after applying filter
-  light_df = reactive({ filter_valids(lightDS, 
-                                      c("DMSO", "M1071", "Rapa"), is_infinite = TRUE, 
+  light_df = reactive({ filter_valids(lightS, 
+                                      c("DMSO", "M1071", "Rapa"),
                                       c(input$DMSO_valid_light, input$M1071_valid_light, input$Rapa_valid_light), 
-                                      at_least_one = input$filter_type_light) 
+                                      at_least_one = input$filter_type_light,
+                                      special_cond = "_0hr",
+                                      special_filter = input$DMSO_quant_light) 
   })
   light_table_raw = reactive({ 
-    outTable = filter_valids(lightDS,
-                             c("DMSO", "M1071", "Rapa"), is_infinite = TRUE,
-                             c(input$DMSO_valid_light, input$M1071_valid_light, input$Rapa_valid_light),
-                             at_least_one = input$filter_type_light)
+    outTable = lightS
     outTable = outTable[c("Gene.name", "Protein.ID", "slope_DMSO", "slope_M1071", "slope_Rapa", 
                           "score_M1071", "score_Rapa")]
     outTable[3:7] = round(as.matrix(outTable[3:7]), 3)
     return(outTable)
   })
   light_table_filtered = reactive({ 
-    outTable = filter_valids(lightDS,
-                             c("DMSO", "M1071", "Rapa"), is_infinite = TRUE,
+    outTable = filter_valids(lightS,
+                             c("DMSO", "M1071", "Rapa"),
                              c(input$DMSO_valid_light, input$M1071_valid_light, input$Rapa_valid_light),
-                             at_least_one = input$filter_type_light)
+                             at_least_one = input$filter_type_light,
+                             special_cond = "_0hr",
+                             special_filter = input$DMSO_quant_light)
     outTable = outTable[outTable$KEEP, c("Gene.name", "Protein.ID", "slope_DMSO", "slope_M1071", "slope_Rapa",
                                          "score_M1071", "score_Rapa")]
     outTable[3:7] = round(as.matrix(outTable[3:7]), 3)
@@ -1130,34 +1067,18 @@ server = function(input, output, session) {
   
   # LIGHT: Output pairwise plot
   output$pair_plot_light_DMSO <- renderPlot({ 
-    if (input$pair_plot_light_display == "LOG2") {
-      plot_pairs(light_df(), "^LOG2.*DMSO", use_keep = TRUE)
-    } else {
-      plot_pairs(light_df(), "^NORM.*DMSO", use_keep = TRUE)
-    }
+    plot_pairs(light_df(), "^LOG2.*DMSO", use_keep = TRUE)
   })
   output$pair_plot_light_M1071 <- renderPlot({ 
-    if (input$pair_plot_light_display == "LOG2") {
-      plot_pairs(light_df(), "^LOG2.*M1071", use_keep = TRUE)
-    } else {
-      plot_pairs(light_df(), "^NORM.*M1071", use_keep = TRUE)
-    }
+    plot_pairs(light_df(), "^LOG2.*M1071", use_keep = TRUE)
   })
   output$pair_plot_light_Rapa <- renderPlot({ 
-    if (input$pair_plot_light_display == "LOG2") {
-      plot_pairs(light_df(), "^LOG2.*Rapa", use_keep = TRUE)
-    } else {
-      plot_pairs(light_df(), "^NORM.*Rapa", use_keep = TRUE)
-    }
+    plot_pairs(light_df(), "^LOG2.*Rapa", use_keep = TRUE)
   })
   
   # LIGHT: Output heatmap
   output$heatmap_light <- renderPlot({ 
-    if (input$heatmap_light_display == "LOG2") {
-      plot_heatmap(light_df(), "^LOG2")
-    } else {
-      plot_heatmap(light_df(), "^NORM")    
-    }
+    plot_heatmap(light_df(), "^LOG2")
   })
   
   # LIGHT: Filtered Table
@@ -1239,26 +1160,27 @@ server = function(input, output, session) {
   
   # RATIO PAGE --------------------------------------------------
   # RATIO: Data tables after applying filter
-  ratio_df = reactive({ filter_valids(ratioDS, 
-                                      c("DMSO", "M1071", "Rapa"), is_infinite = FALSE, 
+  ratio_df = reactive({ filter_valids(ratioS, 
+                                      c("DMSO", "M1071", "Rapa"),
                                       c(input$DMSO_valid_ratio, input$M1071_valid_ratio, input$Rapa_valid_ratio), 
-                                      at_least_one = input$filter_type_ratio) 
+                                      at_least_one = input$filter_type_ratio,
+                                      special_cond = "_0hr",
+                                      special_filter = input$DMSO_quant_ratio) 
   })
   ratio_table_raw = reactive({ 
-    outTable = filter_valids(ratioDS,
-                             c("DMSO", "M1071", "Rapa"), is_infinite = FALSE,
-                             c(input$DMSO_valid_ratio, input$M1071_valid_ratio, input$Rapa_valid_ratio),
-                             at_least_one = input$filter_type_ratio)
+    outTable = ratioS
     outTable = outTable[c("Gene.name", "Protein.ID", "slope_DMSO", "slope_M1071", "slope_Rapa", 
                           "score_M1071", "score_Rapa")]
     outTable[3:7] = round(as.matrix(outTable[3:7]), 3)
     return(outTable)
   })
   ratio_table_filtered = reactive({ 
-    outTable = filter_valids(ratioDS,
-                             c("DMSO", "M1071", "Rapa"), is_infinite = FALSE,
+    outTable = filter_valids(ratioS,
+                             c("DMSO", "M1071", "Rapa"),
                              c(input$DMSO_valid_ratio, input$M1071_valid_ratio, input$Rapa_valid_ratio),
-                             at_least_one = input$filter_type_ratio)
+                             at_least_one = input$filter_type_ratio,
+                             special_cond = "_0hr",
+                             special_filter = input$DMSO_quant_ratio)
     outTable = outTable[outTable$KEEP, c("Gene.name", "Protein.ID", "slope_DMSO", "slope_M1071", "slope_Rapa",
                                          "score_M1071", "score_Rapa")]
     outTable[3:7] = round(as.matrix(outTable[3:7]), 3)
@@ -1270,34 +1192,18 @@ server = function(input, output, session) {
   
   # RATIO: Output pairwise plot
   output$pair_plot_ratio_DMSO <- renderPlot({ 
-    if (input$pair_plot_ratio_display == "LOG2") {
-      plot_pairs(ratio_df(), "^LOG2.*DMSO", use_keep = TRUE)
-    } else {
-      plot_pairs(ratio_df(), "^NORM.*DMSO", use_keep = TRUE)
-    }
+    plot_pairs(ratio_df(), "^LOG2.*DMSO", use_keep = TRUE)
   })
   output$pair_plot_ratio_M1071 <- renderPlot({ 
-    if (input$pair_plot_ratio_display == "LOG2") {
-      plot_pairs(ratio_df(), "^LOG2.*M1071", use_keep = TRUE)
-    } else {
-      plot_pairs(ratio_df(), "^NORM.*M1071", use_keep = TRUE)
-    }
+    plot_pairs(ratio_df(), "^LOG2.*M1071", use_keep = TRUE)
   })
   output$pair_plot_ratio_Rapa <- renderPlot({ 
-    if (input$pair_plot_ratio_display == "LOG2") {
-      plot_pairs(ratio_df(), "^LOG2.*Rapa", use_keep = TRUE)
-    } else {
-      plot_pairs(ratio_df(), "^NORM.*Rapa", use_keep = TRUE)
-    }
+    plot_pairs(ratio_df(), "^LOG2.*Rapa", use_keep = TRUE)
   })
   
   # RATIO: Output heatmap
   output$heatmap_ratio <- renderPlot({ 
-    if (input$heatmap_ratio_display == "LOG2") {
-      plot_heatmap(ratio_df(), "^LOG2")
-    } else {
-      plot_heatmap(ratio_df(), "^NORM")    
-    }
+    plot_heatmap(ratio_df(), "^LOG2")
   })
   
   # RATIO: Filtered Table
@@ -1379,28 +1285,18 @@ server = function(input, output, session) {
   
   # HEAVY + LIGHT PAGE --------------------------------------------------
   # HEAVY + LIGHT: Full incorporation
-  output$HL_full_incorp <- renderPlot({ plot_hist2(cbind(lightDS, heavyDS, P4heavy)) })
+  output$HL_full_incorp <- renderPlot({ plot_hist2(cbind(lightS, heavyS, P4heavy)) })
   
   # HEAVY + LIGHT: Partial incorporation (By Labeling)
   output$HL_partial_label = renderPlot({
-    if (input$HL_partial_label_display == "LOG2") {
-      plot_hist(cbind(lightDS, heavyDS), compare_time = FALSE,
+    plot_hist(cbind(lightS, heavyS), compare_time = FALSE,
                 "^LOG2\\.L.*(3hr|6hr|12hr|24hr)", "^LOG2\\.H.*(3hr|6hr|12hr|24hr)")
-    } else {
-      plot_hist(cbind(lightDS, heavyDS), compare_time = FALSE,
-                "^NORM\\.L.*(3hr|6hr|12hr|24hr)", "^NORM\\.H.*(3hr|6hr|12hr|24hr)")
-    }
   })
   
   # HEAVY + LIGHT: Partial incorporation (By Time)
   output$HL_partial_time = renderPlot({
-    if (input$HL_partial_time_display == "LOG2") {
-      plot_hist(cbind(lightDS, heavyDS), compare_time = TRUE,
+    plot_hist(cbind(lightS, heavyS), compare_time = TRUE,
                 "^LOG2\\.L.*(3hr|6hr|12hr|24hr)", "^LOG2\\.H.*(3hr|6hr|12hr|24hr)")
-    } else {
-      plot_hist(cbind(lightDS, heavyDS), compare_time = TRUE,
-                "^NORM\\.L.*(3hr|6hr|12hr|24hr)", "^NORM\\.H.*(3hr|6hr|12hr|24hr)")
-    }
   })
   
   
@@ -1423,5 +1319,5 @@ shinyApp(ui = ui, server = server)
 #############################################
 # Copy and run code in console
 #library(rsconnect)
-#setwd('C:/Users/Tony Lin/Desktop/Wiita_lab/Projects/Proteomics_project/Pulsed_silac_Ozlem/Proteomics/analysis/deployDirectory')
+#setwd('C:/Users/Tony Lin/Desktop/Wiita_lab/Projects/Proteomics_project/Pulsed_silac_Ozlem/Proteomics/analysis/LFQ-newDMSO')
 #deployApp()
