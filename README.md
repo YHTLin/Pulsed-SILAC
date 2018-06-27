@@ -17,9 +17,10 @@ proteins whose biosyntheses are sensitive to M1071 in the context of neural cell
 in protein translation using two techniques, ribosome profiling and pulsed SILAC proteomics.
 
 ## File Description
-+ *pulsed_SILAC_ozlem.R*: R analysis script
-+ *pulsed_SILAC.RData*: Saved workspace after running the script above
++ *pulsed_SILAC_ozlem.R*: R analysis script.
++ *pulsed_SILAC.RData*: Saved workspace after running the script above.
 + *deployDirectory/app.R*: Source code behind interactive app.
++ *LFQ-newDMSO/app.R*: Updated interactive app.
 
 ## Usage
-An interactive web tool, built using ShinyApp in R, is available for dynamic data visualization. Visit the site [here](https://tony-lin.shinyapps.io/deploydirectory/).
+An interactive web tool, built using ShinyApp in R, is available for dynamic data visualization. Visit the site [here](https://tony-lin.shinyapps.io/lfq-newdmso/).
